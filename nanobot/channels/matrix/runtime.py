@@ -1101,6 +1101,15 @@ class MatrixChannel(BaseChannel):
         while self._running:
             try:
                 client = self._require_client()
+                # Resume-only clients (store_sync_tokens) make the first sync
+                # incremental: rooms quiet since the stored token never register,
+                # and the first incremental entry that registers one carries no
+                # member summary, so nio computes member_count = 0 and
+                # _is_direct_room misclassifies real groups as DMs, bypassing the
+                # group policy. Blank the token once so the first sync is a full
+                # initial sync; replayed pre-startup messages are already filtered.
+                if getattr(client, "loaded_sync_token", None):
+                    client.loaded_sync_token = ""
                 await client.sync_forever(timeout=30000, full_state=True)
                 backoff = 2.0
             except asyncio.CancelledError:
